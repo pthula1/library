@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#24483f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Pocket Library">
+  <meta name="description" content="A personal book collection and checkout tracker.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>Pocket Library</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-mark" aria-hidden="true">▤</div>
+    <div><p class="eyebrow">YOUR PERSONAL COLLECTION</p><h1>Pocket Library</h1></div>
+    <button id="backupBtn" class="icon-button" aria-label="Backup and restore" title="Backup and restore">↕</button>
+  </header>
+
+  <main>
+    <section class="stats" aria-label="Library summary">
+      <div class="stat-card"><span class="stat-number" id="totalCount">0</span><span class="stat-label">All books</span></div>
+      <div class="stat-card"><span class="stat-number" id="loanCount">0</span><span class="stat-label">Checked out</span></div>
+      <div class="stat-card"><span class="stat-number" id="overdueCount">0</span><span class="stat-label">Overdue</span></div>
+    </section>
+
+    <section class="actions">
+      <button class="primary-button" id="scanBtn"><span aria-hidden="true">▦</span> Scan a book</button>
+      <button class="secondary-button" id="manualBtn"><span aria-hidden="true">＋</span> Add manually</button>
+    </section>
+
+    <section class="search-row">
+      <span aria-hidden="true">⌕</span>
+      <input id="searchInput" type="search" placeholder="Search title, author, ISBN, borrower…" autocomplete="off" aria-label="Search library">
+    </section>
+
+    <nav class="tabs" aria-label="Filter books">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="available">Available</button>
+      <button class="tab" data-filter="loaned">Checked out</button>
+      <button class="tab" data-filter="overdue">Overdue</button>
+    </nav>
+
+    <section id="bookList" class="book-list" aria-live="polite"></section>
+    <section id="emptyState" class="empty-state">
+      <div class="empty-icon">▤</div><h2>Your shelves are waiting</h2>
+      <p>Scan the barcode on a book or add its details manually to start your collection.</p>
+      <button class="primary-button" id="emptyScanBtn">Scan your first book</button>
+    </section>
+    <p class="privacy-note"><span aria-hidden="true">🔒</span> Your collection is saved in this browser on this iPhone. Export a backup regularly.</p>
+  </main>
+
+  <dialog id="scannerDialog" class="modal">
+    <div class="modal-header"><div><p class="eyebrow">ISBN LOOKUP</p><h2>Scan a barcode</h2></div><button class="close-button" data-close="scannerDialog" aria-label="Close">×</button></div>
+    <p class="helper">Hold the ISBN barcode on the back cover inside the frame. Allow camera access when Safari asks.</p>
+    <div class="video-wrap"><video id="scannerVideo" playsinline muted></video><div class="scan-frame"></div></div>
+    <p id="scannerStatus" class="status-message">Starting camera…</p>
+    <div class="manual-isbn"><label for="isbnInput">Or enter ISBN manually</label><div class="inline-input"><input id="isbnInput" inputmode="numeric" placeholder="ISBN-10 or ISBN-13"><button id="lookupBtn" class="secondary-button">Look up</button></div></div>
+  </dialog>
+
+  <dialog id="bookDialog" class="modal">
+    <div class="modal-header"><div><p class="eyebrow" id="bookDialogEyebrow">BOOK DETAILS</p><h2 id="bookDialogTitle">Review book</h2></div><button class="close-button" data-close="bookDialog" aria-label="Close">×</button></div>
+    <div id="lookupNotice" class="notice" hidden></div>
+    <div class="book-preview"><img id="previewCover" alt="Book cover" hidden><div class="preview-placeholder" id="previewPlaceholder">▤</div><div class="preview-info"><h3 id="previewTitle">Book title</h3><p id="previewAuthor"></p><p id="previewMeta" class="muted"></p></div></div>
+    <form id="bookForm" class="form-stack">
+      <label>Title <input id="editTitle" required maxlength="250"></label>
+      <label>Author <input id="editAuthor" maxlength="250"></label>
+      <label>ISBN <input id="editIsbn" maxlength="20" inputmode="numeric"></label>
+      <label>Publisher / year <input id="editPublisher" maxlength="250"></label>
+      <label>Shelf or location (optional) <input id="editShelf" maxlength="100" placeholder="e.g. Office shelf A"></label>
+      <div class="button-stack"><button type="button" class="primary-button" id="saveBookBtn">Add to my library</button><button type="button" class="secondary-button" id="checkoutFromLookupBtn">Check out this book</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="checkoutDialog" class="modal">
+    <div class="modal-header"><div><p class="eyebrow">LENDING RECORD</p><h2>Check out a book</h2></div><button class="close-button" data-close="checkoutDialog" aria-label="Close">×</button></div>
+    <p id="checkoutBookName" class="checkout-book-name"></p>
+    <form id="checkoutForm" class="form-stack">
+      <label>Borrower name <input id="borrowerInput" required maxlength="150" autocomplete="name" placeholder="Who is borrowing it?"></label>
+      <div class="two-col"><label>Checkout date <input id="checkoutDate" type="date" required></label><label>Due date <input id="dueDate" type="date" required></label></div>
+      <div class="button-stack"><button class="primary-button" type="submit">Confirm checkout</button><button class="secondary-button" type="button" data-close="checkoutDialog">Cancel</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="modal">
+    <div class="modal-header"><div><p class="eyebrow">YOUR COLLECTION</p><h2>Book details</h2></div><button class="close-button" data-close="detailDialog" aria-label="Close">×</button></div>
+    <div id="detailContent"></div>
+  </dialog>
+
+  <dialog id="backupDialog" class="modal">
+    <div class="modal-header"><div><p class="eyebrow">YOUR DATA</p><h2>Backup & restore</h2></div><button class="close-button" data-close="backupDialog" aria-label="Close">×</button></div>
+    <p class="helper">Your data is stored only in this browser. Export a JSON backup before clearing Safari data or changing devices.</p>
+    <div class="button-stack"><button class="primary-button" id="exportBtn">Export backup (JSON)</button><button class="secondary-button" id="exportCsvBtn">Export book list (CSV)</button></div>
+    <label class="file-label">Restore from JSON backup<input id="importFile" type="file" accept="application/json,.json"></label>
+    <button class="danger-button" id="clearDataBtn">Delete all library data</button>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
