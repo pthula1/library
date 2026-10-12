@@ -1,4 +1,5 @@
 import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
+import { BarcodeFormat, DecodeHintType } from 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/+esm';
 
 const $ = id => document.getElementById(id);
 const STORAGE_KEY = 'pocket-library-v1';
@@ -31,15 +32,52 @@ function render(){
 function openDialog(id){ $(id).showModal(); }
 function closeDialog(id){ if($(id).open) $(id).close(); }
 async function startScanner(){
-  openDialog('scannerDialog'); $('scannerStatus').textContent='Starting camera…';
-  if(!navigator.mediaDevices?.getUserMedia){ $('scannerStatus').textContent='Camera access is not available in this browser. Open the HTTPS website in Safari.'; return; }
+  openDialog('scannerDialog');
+  $('scannerStatus').textContent='Starting rear camera and ISBN barcode detector…';
+  if(!navigator.mediaDevices?.getUserMedia){
+    $('scannerStatus').textContent='Camera access is unavailable. Open the published HTTPS website directly in Safari.';
+    return;
+  }
   try {
-    stopScanner(); reader=new BrowserMultiFormatReader();
-    controls=await reader.decodeFromVideoDevice(undefined,$('scannerVideo'),(result,error)=>{
-      if(result){ const raw=result.getText(); const isbn=normalizeIsbn(raw); if(isbn){ $('isbnInput').value=isbn; stopScanner(); closeDialog('scannerDialog'); lookupIsbn(isbn); } else { $('scannerStatus').textContent='Barcode detected, but it does not look like an ISBN. Aim at the book’s ISBN barcode, not a retail price barcode.'; } }
-    });
-    $('scannerStatus').textContent='Camera ready. Center the ISBN barcode in the frame and hold still.';
-  } catch(e){ $('scannerStatus').textContent=`Could not start scanning: ${e?.message||'camera error'}. Check Safari camera permission and try again.`; }
+    stopScanner();
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.ITF
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    reader = new BrowserMultiFormatReader(hints, 250);
+    controls = await reader.decodeFromConstraints(
+      { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+      $('scannerVideo'),
+      (result, error) => {
+        if (!result) return; // Most frames do not contain a barcode; ignore those normal misses.
+        const raw = result.getText();
+        const isbn = normalizeIsbn(raw);
+        if (isbn) {
+          $('isbnInput').value = isbn;
+          stopScanner();
+          closeDialog('scannerDialog');
+          lookupIsbn(isbn);
+        } else {
+          $('scannerStatus').textContent = `Barcode read (${raw}), but it is not a valid ISBN. Scan the long barcode beside the ISBN printed on the book.`;
+        }
+      }
+    );
+    const video = $('scannerVideo');
+    if (video && video.readyState < 2) {
+      video.addEventListener('loadeddata', () => {
+        if ($('scannerDialog').open) $('scannerStatus').textContent='Camera ready. Fill the scan frame with the long ISBN barcode and hold still.';
+      }, { once: true });
+    }
+    $('scannerStatus').textContent='Camera ready. Fill the scan frame with the long ISBN barcode and hold still.';
+  } catch(e) {
+    $('scannerStatus').textContent=`Scanner could not start: ${e?.message || 'unknown error'}. Close the scanner and try again in Safari.`;
+  }
 }
 function stopScanner(){ try{ if(controls?.stop) controls.stop(); }catch{} controls=null; try{ if(reader?.reset) reader.reset(); }catch{} reader=null; const v=$('scannerVideo'); if(v?.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null;} }
 function normalizeIsbn(raw){ const s=String(raw||'').replace(/[^0-9Xx]/g,'').toUpperCase(); if(s.length===13 && /^(978|979)/.test(s)) return s; if(s.length===10) return s; return ''; }
